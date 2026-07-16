@@ -1,0 +1,19 @@
+# Core deep learning
+torch==1.13.1
+torch_geometric==2.3.1
+
+# Scientific computing
+numpy==1.26.4
+scipy==1.5.4
+scikit-learn==1.0.2
+pandas==2.3.1
+
+# Chemistry / Molecular processing
+rdkit==2023.3.2
+networkx==2.6.3
+
+# Visualization
+matplotlib==3.7.5
+
+# Utilities
+tqdm==4.67.1

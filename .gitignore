@@ -1,0 +1,41 @@
+# Pre-computed features (large files hosted on Figshare)
+*.npz
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Slurm logs
+slurm_logs/
+*.tex
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+logs/
+.DS_Store
+Thumbs.db
+
+# Virtual environments
+venv/
+env/
+.env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.json
+scripts/
+
+# PyTorch checkpoints
+*.pt
+*.pth

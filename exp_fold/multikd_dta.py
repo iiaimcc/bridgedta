@@ -10,7 +10,12 @@ import torch.nn as nn
 from torch_geometric.loader import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
-sys.path.append("/home/zh/workspace/BridgeDTA")
+import os, sys as _sys
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in _sys.path:
+    _sys.path.insert(0, _REPO_ROOT)
+from paths import setup_imports, get_repo_root, apply_training_cli_overrides
+setup_imports()
 
 from trainer import DTATrainer
 from models.MultiKD_DTA.multikd_dta import Predictor
@@ -20,7 +25,7 @@ from models.MultiKD_DTA.create_data import MultiKD_DTADataset
 fold = sys.argv[1] if len(sys.argv) > 1 else "0"
 
 # Load esm protein features
-base_dir = "/home/zh/workspace/BridgeDTA"
+base_dir = str(get_repo_root())
 z = np.load(f'{base_dir}/models/MultiKD_DTA/features/kiba.npz', allow_pickle=True)
 z = z['dict'][()]
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -63,6 +68,8 @@ class TrainingArguments:
         self.do_plot = True
         self.dataset = "kiba"
         self.cold_start = fold
+        # Allow command-line overrides (e.g. --dataset davis --num-epochs 1)
+        apply_training_cli_overrides(self)
 
 def main():
     args = TrainingArguments()

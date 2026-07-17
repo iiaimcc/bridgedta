@@ -3,7 +3,12 @@ import sys
 import torch
 import numpy as np
 
-sys.path.append("/home/zh/workspace/BridgeDTA")
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from paths import setup_imports, get_repo_root, feature_dir
+setup_imports()
 
 from trainer import DTATrainer
 from models.Bridge_DTA.bridge_dta_full import BridgeDTA
@@ -11,6 +16,7 @@ from datahelper.bridge_dataset import (
     BridgeDTADataset, CHARPROTLEN,
     bridge_forward_step, get_bridge_dataloader,
 )
+from paths import apply_training_cli_overrides
 
 # Global device setup
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -32,6 +38,8 @@ class TrainingArguments:
         self.kpgt_feature_level = "node"
         # Whether to prepend [fp_vn, md_vn] as CLS+REG tokens at the beginning of K/V sequence in node mode
         self.kpgt_use_global_tokens = True
+        # Allow command-line overrides (e.g. --dataset davis --num-epochs 1)
+        apply_training_cli_overrides(self)
 
 
 def _load_kpgt_features(kpgt_path, level, use_global_tokens=True):
@@ -54,12 +62,12 @@ def _load_kpgt_features(kpgt_path, level, use_global_tokens=True):
             smiles_arr = npz['smiles']
             atom_feats = npz['atom_feats']
             offsets = npz['offsets']
-            fp_vn = npz['fp_vn'] if use_global_tokens else None
-            md_vn = npz['md_vn'] if use_global_tokens else None
         kpgt_features = {}
         for i in range(len(smiles_arr)):
             atoms = atom_feats[offsets[i]:offsets[i + 1]]
             if use_global_tokens:
+                fp_vn = npz['fp_vn']
+                md_vn = npz['md_vn']
                 global_tokens = np.stack([fp_vn[i], md_vn[i]], axis=0)
                 kpgt_features[str(smiles_arr[i])] = np.concatenate(
                     [global_tokens, atoms], axis=0
@@ -73,8 +81,8 @@ def _load_kpgt_features(kpgt_path, level, use_global_tokens=True):
 
 def main():
     args = TrainingArguments()
-    # Use global device variable
-    base_dir = "/home/zh/workspace/BridgeDTA"
+    # Repository root resolved relative to this file (no more hard-coded paths).
+    base_dir = str(get_repo_root())
 
     # Load KPGT and ESM features
     kpgt_filename = (
@@ -82,8 +90,23 @@ def main():
         if args.kpgt_feature_level == "node"
         else f"{args.dataset.lower()}.npz"
     )
-    kpgt_path = os.path.join(base_dir, "models/Bridge_DTA/feature_kpgt", kpgt_filename)
-    esm_path = os.path.join(base_dir, "models/Bridge_DTA/feature_esm", f"{args.dataset.lower()}.npz")
+    kpgt_path = str(feature_dir("feature_kpgt") / kpgt_filename)
+    esm_path = str(feature_dir("feature_esm") / f"{args.dataset.lower()}.npz")
+
+    if not os.path.exists(kpgt_path):
+        raise FileNotFoundError(
+            f"KPGT feature file not found: {kpgt_path}\n"
+            "Download the pre-computed features from "
+            "https://doi.org/10.6084/m9.figshare.32294592 and place them "
+            "under models/Bridge_DTA/feature_kpgt/ (see README)."
+        )
+    if not os.path.exists(esm_path):
+        raise FileNotFoundError(
+            f"ESM feature file not found: {esm_path}\n"
+            "Download the pre-computed features from "
+            "https://doi.org/10.6084/m9.figshare.32294592 and place them "
+            "under models/Bridge_DTA/feature_esm/ (see README)."
+        )
 
     print(f"Loading KPGT features ({args.kpgt_feature_level}-level) from {kpgt_path} ...")
     kpgt_features, kpgt_dim = _load_kpgt_features(
@@ -107,7 +130,7 @@ def main():
     
     # Load datasets
     train_set = BridgeDTADataset(
-        root=f"{base_dir}/data",
+        root=str(get_repo_root() / "data"),
         dataset=args.dataset.lower(),
         mode='train',
         cold_start=args.cold_start,
@@ -118,7 +141,7 @@ def main():
     )
     
     test_set = BridgeDTADataset(
-        root=f"{base_dir}/data",
+        root=str(get_repo_root() / "data"),
         dataset=args.dataset.lower(),
         mode='test',
         cold_start=args.cold_start,

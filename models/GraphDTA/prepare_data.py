@@ -1,6 +1,9 @@
 import os
 import sys
-sys.path.append("/home/zh/workspace/BridgeDTA")
+
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 import torch
 import networkx as nx

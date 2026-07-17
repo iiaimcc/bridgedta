@@ -1,12 +1,18 @@
 import os
+import sys
 import json
 import pickle
 import numpy as np
 from collections import OrderedDict
 from typing import List
 
-# Set base path
-BASE_DIR = "/home/zh/workspace/BridgeDTA"
+# Resolve the repository root (this file lives in <repo>/datahelper).
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+# Base path
+BASE_DIR = _REPO_ROOT
 DATASETS = ['davis', 'kiba']
 
 def process_affinity(affinity, dataset):

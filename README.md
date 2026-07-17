@@ -98,6 +98,54 @@ pip install -r requirements.txt
 
 **Core dependencies:** Python 3.9+, PyTorch 1.13.1, PyG 2.3.1, RDKit, NumPy, SciPy, scikit-learn. See [`requirements.txt`](requirements.txt) for full list.
 
+> **CUDA wheel note:** The PyG C++ backends (`torch_scatter`, `torch_sparse`, `torch_cluster`) must match the PyTorch build. After installing PyTorch, install them from the matching wheel index, e.g. for CPU:
+> ```bash
+> pip install torch_scatter torch_sparse torch_cluster -f https://data.pyg.org/whl/torch-1.13.1+cpu.html
+> ```
+> For CUDA 11.6, use `torch-1.13.1+cu116.html` instead.
+
+> **Optional (feature extraction only):** If you intend to (re)generate the
+> frozen `.npz` features yourself rather than downloading them, you also need
+> `pip install fair-esm` (see *Regenerating the pre-computed features*).
+> Running the published model and reproducing the paper's results does **not**
+> require this — the Figshare `.npz` bundle is enough.
+
+## ⚠️ Required: pre-computed KPGT & ESM-2 features
+
+BridgeDTA (the proposed model) loads **frozen** pre-computed features from disk
+at the start of every run. They are **not** included in the repository because
+of their size (≈ several hundred MB). Without them, `experiments/4_bridge_dta_full.py`
+and `exp_fold/bridgedta.py` will refuse to start with a `FileNotFoundError`.
+
+**Download once before the first run:**
+
+📥 **Download link:** [https://doi.org/10.6084/m9.figshare.32294592](https://doi.org/10.6084/m9.figshare.32294592)
+
+After downloading, unzip and place the `.npz` files exactly as:
+
+```
+models/Bridge_DTA/
+├── feature_esm/
+│   ├── davis.npz
+│   └── kiba.npz
+└── feature_kpgt/
+    ├── davis.npz           # graph-level (used when --kpgt_feature_level graph)
+    ├── davis_node.npz      # token-level   (used when --kpgt_feature_level node, default)
+    ├── kiba.npz
+    └── kiba_node.npz
+```
+
+The four `_node.npz` files store: `smiles` (canonical SMILES array), `atom_feats`
+(concatenated per-atom features `[total_atoms, 768]`), `offsets` (per-molecule
+slice indices into `atom_feats`), and two virtual-node tensors `fp_vn`/`md_vn`
+(`[N, 768]`).
+
+If you only need to reproduce the **baselines** (DeepDTA, GraphDTA, TEFDTA,
+GS-DTA), the pre-computed features are NOT required — those baselines use only
+the `data/` text files that ship with this repository. The only baseline that
+also needs an ESM `.npz` is MultiKD-DTA (it expects
+`models/MultiKD_DTA/features/kiba.npz`, also obtainable from the Figshare link).
+
 ## Datasets
 
 | Dataset | Compounds | Proteins | Interactions | Train | Test |
@@ -113,48 +161,94 @@ The processed data splits are already included in the `data/` directory of this 
 
 ## Running Experiments
 
+All entry-point scripts accept **command-line overrides** for the most
+important hyper-parameters: `--dataset`, `--num_epochs`, `--batch_size`,
+`--seed`, `--log_steps`, `--cold_start`. Anything not provided falls back to
+the script's own defaults (documented in the `TrainingArguments` class at the
+top of each script). This means you can run a fast smoke test without editing
+any source file.
+
+### Quick smoke test (no pre-computed features needed — baseline only)
+
 ```bash
-# Single run (development)
-python experiments/4_bridge_dta_full.py          # BridgeDTA
-python experiments/{1_tefdta,5_graphdta,...}.py   # Baselines
-
-# 5-fold cross-validation (formal evaluation)
-python exp_fold/bridgedta.py                      # BridgeDTA
-python exp_fold/{deepdta,graphdta,gsdta,...}.py   # Baselines
+# Run DeepDTA for 1 epoch on the Davis dataset on CPU
+python experiments/6_deepdta.py --dataset davis --num_epochs 1 --batch_size 64 --log_steps 1
 ```
 
-Results (checkpoints and metrics) are saved under `results/`.
+A successful run will print a `Training started at: ...` banner, log every
+`TrainingArguments` value, then start epoch 1. The output directory and log
+file are created under `results/` (see *Outputs* below). Expect dozens of
+minutes per epoch on CPU; on GPU it finishes within a minute.
 
-## Pre-computed Features
+### Single-run training
 
-BridgeDTA uses pre-computed LPM features (frozen during training):
-
-| Source | Directory | Description |
-|--------|-----------|-------------|
-| KPGT | `models/Bridge_DTA/feature_kpgt/` | Graph-level (2304-d) & token-level (768-d per atom) |
-| ESM-2 | `models/Bridge_DTA/feature_esm/` | Per-residue protein embeddings (640-d) |
-
-### Download
-
-The pre-computed feature files (`.npz`) are hosted on Figshare due to their large size:
-
-📥 **Download link:** [https://doi.org/10.6084/m9.figshare.32294592](https://doi.org/10.6084/m9.figshare.32294592)
-
-After downloading, place the feature files in the following directories:
-
-```
-models/Bridge_DTA/
-├── feature_esm/
-│   ├── davis.npz
-│   └── kiba.npz
-└── feature_kpgt/
-    ├── davis.npz           # graph-level
-    ├── davis_node.npz      # token-level
-    ├── kiba.npz            
-    └── kiba_node.npz       
+```bash
+python experiments/4_bridge_dta_full.py --dataset davis --num_epochs 500   # BridgeDTA (proposed)
+python experiments/1_tefdta.py    --dataset davis --num_epochs 200          # TEFDTA baseline
+python experiments/2_gs_dta.py    --dataset davis --num_epochs 500          # GS-DTA baseline
+python experiments/3_multikd_dta.py --dataset kiba --num_epochs 500          # MultiKD-DTA baseline (needs features/kiba.npz)
+python experiments/5_graphdta.py  --dataset davis --num_epochs 500          # GraphDTA baseline
+python experiments/6_deepdta.py    --dataset davis --num_epochs 500          # DeepDTA baseline
 ```
 
-The `*_node.npz` files store: `smiles` (array of canonical SMILES), `atom_feats` (concatenated per-atom features `[total_atoms, 768]`), `offsets` (per-molecule slice indices into `atom_feats`), and two virtual-node tensors `fp_vn` / `md_vn` (`[N, 768]`).
+### 5-fold cross-validation (formal evaluation)
+
+```bash
+python exp_fold/bridgedta.py 0   # fold index 0..4; BridgeDTA proposed model
+python exp_fold/deepdta.py   0   # baselines (same fold index convention)
+python exp_fold/graphdta.py  0
+python exp_fold/gsdta.py     0
+python exp_fold/multikd_dta.py 0   # needs models/MultiKD_DTA/features/kiba.npz
+python exp_fold/tefdta.py    0
+```
+
+### Outputs
+
+Results are saved under `results/<model_name>/` inside the repository:
+
+```
+results/<model_name>/
+├── <MMDD>_<model>_<dataset>.log          # full training log (per-epoch loss, validation metrics, test results)
+└── checkpoints_<dataset>/
+    ├── best_model.pth                    # weights with the lowest validation MSE
+    ├── final_model.pth                    # final-epoch weights (saved by trainer.save_model())
+    └── plots/<model>_<dataset>_training_curves.png   # loss/CI/rm2 curves
+```
+
+The trainer writes a `Test Results:` block to the log at the end of training,
+listing every metric in the *Evaluation Metrics* table below, e.g.:
+
+```
+Test Results:
+mse: 0.1903
+ci: 0.9041
+rm2: 0.6720
+pcc: 0.8512
+spearman: 0.6347
+loss: 0.1903
+```
+
+### Inputs
+
+Per dataset, the `data/<dataset>/` directory contains the raw inputs used by
+all models:
+
+| File | Format | Meaning |
+|------|--------|---------|
+| `ligands_can.txt` | JSON object `{id: canonical_SMILES}` | unique compound set |
+| `proteins.txt`    | JSON object `{id: FASTA}`            | unique protein set |
+| `Y`               | pickled 2D NumPy array `[len(ligands), len(proteins)]` | affinity matrix; Davis stores `pK_d = -log10(K_d/1e9)`, KIBA stores the KIBA score |
+| `folds/train_fold_setting1.txt` / `test_fold_setting1.txt` | JSON lists of row-indices | 5 cross-validation folds |
+| `processed/{train,test}{_fold,N}.txt` | whitespace-separated rows `compound_idx protein_idx label` | pre-computed splits (produced by `python datahelper/split_train_test_data.py`) |
+
+The BridgeDTA model additionally reads the pre-computed `.npz` features listed
+in *⚠️ Required: pre-computed KPGT & ESM-2 features* above.
+
+## (Optional) Regenerating the pre-computed features
+
+The frozen features can be re-extracted from the original KPGT and ESM-2 models
+if you cannot (or prefer not to) download the Figshare bundle. This is
+not required for the paper's results — the Figshare files are sufficient.
 
 ### Pre-trained Model Weights
 

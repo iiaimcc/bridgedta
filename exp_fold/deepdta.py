@@ -8,7 +8,12 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 
-sys.path.append("/home/zh/workspace/BridgeDTA")
+import os, sys as _sys
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in _sys.path:
+    _sys.path.insert(0, _REPO_ROOT)
+from paths import setup_imports, get_repo_root, apply_training_cli_overrides
+setup_imports()
 
 from trainer import DTATrainer
 from models.DeepDTA.deepdta import DeepDTA
@@ -62,10 +67,12 @@ class TrainingArguments:
         self.channel = 32
         self.protein_kernel = 12    # [8, 12]
         self.ligand_kernel = 8     # [4, 8] 
+        # Allow command-line overrides (e.g. --dataset davis --num-epochs 1)
+        apply_training_cli_overrides(self)
 
 def main():
     args = TrainingArguments()
-    base_dir = "/home/zh/workspace/BridgeDTA"
+    base_dir = str(get_repo_root())
 
     # Set random seed for reproducibility
     torch.manual_seed(args.seed)

@@ -39,3 +39,6 @@ scripts/
 # PyTorch checkpoints
 *.pt
 *.pth
+
+# Training outputs (created at runtime by the trainer)
+results/

@@ -7,9 +7,18 @@ import sys
 import torch
 import numpy as np
 
-sys.path.append("/home/zh/workspace/BridgeDTA")
+import os, sys as _sys
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in _sys.path:
+    _sys.path.insert(0, _REPO_ROOT)
+from paths import setup_imports, get_repo_root, apply_training_cli_overrides
+setup_imports()
 
-from trainer_resume import DTATrainer  # change 2 resume version
+try:
+    # Optional checkpoint-resume trainer variant (not shipped with this repo).
+    from trainer_resume import DTATrainer  # change 2 resume version
+except ModuleNotFoundError:
+    from trainer import DTATrainer
 from models.Bridge_DTA.bridge_dta_full import BridgeDTA
 from datahelper.bridge_dataset import (
     BridgeDTADataset, CHARPROTLEN,
@@ -39,6 +48,8 @@ class TrainingArguments:
         self.kpgt_feature_level = "node"
         # Whether to prepend [fp_vn, md_vn] as CLS+REG tokens at the beginning of K/V sequence in node mode
         self.kpgt_use_global_tokens = True
+        # Allow command-line overrides (e.g. --dataset davis --num-epochs 1)
+        apply_training_cli_overrides(self)
 
 
 def _load_kpgt_features(kpgt_path, level, use_global_tokens=True):
@@ -76,7 +87,7 @@ def _load_kpgt_features(kpgt_path, level, use_global_tokens=True):
 def main():
     args = TrainingArguments()
     # Use global device variable
-    base_dir = "/home/zh/workspace/BridgeDTA"
+    base_dir = str(get_repo_root())
 
     # Load KPGT and ESM features
     kpgt_filename = (

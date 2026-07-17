@@ -8,8 +8,10 @@ import matplotlib.pyplot as plt
 from utils.metrics import set_seed, compute_metrics
 from torch.utils.data import DataLoader
 
-# workspace
-sys.path.append("/home/zh/workspace/BridgeDTA")
+# Make the repository importable regardless of where the script is launched from.
+_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 class DTATrainer:
     def __init__(
@@ -66,8 +68,8 @@ class DTATrainer:
         self.epochs = []
 
     def setup_logging(self):
-        # Create experiment directory
-        exp_dir = os.path.join('../results', self.args.model_name)
+        # Create experiment directory under <repo>/results
+        exp_dir = os.path.join(_REPO_ROOT, 'results', self.args.model_name)
         os.makedirs(exp_dir, exist_ok=True)
         
         # Set up logging

@@ -10,7 +10,12 @@ from torch.utils.data import random_split, Subset
 from torch_geometric.loader import DataLoader as PyGDataLoader
 import torch_geometric
 
-sys.path.append("/home/zh/workspace/BridgeDTA")
+import os, sys as _sys
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in _sys.path:
+    _sys.path.insert(0, _REPO_ROOT)
+from paths import setup_imports, get_repo_root, apply_training_cli_overrides
+setup_imports()
 
 from trainer import DTATrainer
 from models.GS_DTA.gs_dta import GS_DTA
@@ -71,11 +76,13 @@ class TrainingArguments:
         self.do_plot = True
         self.dataset = "kiba"
         self.cold_start = fold
+        # Allow command-line overrides (e.g. --dataset davis --num-epochs 1)
+        apply_training_cli_overrides(self)
 
 def main():
     args = TrainingArguments()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    base_dir = "/home/zh/workspace/BridgeDTA"
+    base_dir = str(get_repo_root())
 
     # Set random seed for reproducibility
     torch.manual_seed(args.seed)

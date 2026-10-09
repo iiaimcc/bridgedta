@@ -265,7 +265,7 @@ def get_bridge_dataloader(dataset, batch_size, shuffle=False):
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        drop_last=True,
+        drop_last=shuffle,
         collate_fn=bridge_collate_fn
     )
 

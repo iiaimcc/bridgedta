@@ -128,7 +128,7 @@ class LinkAttention(nn.Module):
         a = self.softmax(e)
 
         out = torch.matmul(a, value)
-        out = torch.sum(out, dim=1).squeeze()
+        out = torch.sum(out, dim=1)
         return out, a
 
 
@@ -245,5 +245,5 @@ class Predictor(nn.Module):
         out = torch.cat([xd_cat, xt_cat, out_cat], dim=1)
         d_block = self.dropout(self.relu(self.out_fc1(out)))
         out = self.dropout(self.relu(self.out_fc2(d_block)))
-        out = self.out_fc3(out).squeeze()
+        out = self.out_fc3(out).squeeze(-1)
         return d_block, out

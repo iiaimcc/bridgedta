@@ -50,7 +50,7 @@ def get_graphdta_dataloader(dataset, batch_size, shuffle=False):
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        drop_last=True
+        drop_last=shuffle
     )
 
 class TrainingArguments:

@@ -43,7 +43,7 @@ class TrainingArguments:
         self.do_plot = True
         self.dataset = "kiba"
         self.cold_start = fold
-        self.ci_weight = 1.0    # tmp 0.2/1.0
+        self.ci_weight = 0.2
         # KPGT feature mode: "graph" (2304-d) or "node" (768-d)
         self.kpgt_feature_level = "node"
         # Whether to prepend [fp_vn, md_vn] as CLS+REG tokens at the beginning of K/V sequence in node mode
@@ -129,11 +129,22 @@ def main():
         device=device
     )
     
-    test_set = BridgeDTADataset(
+    validation_set = BridgeDTADataset(
         root=f"{base_dir}/data",
         dataset=args.dataset.lower(),
         mode='test',
         cold_start=args.cold_start,
+        kpgt_features=kpgt_features,
+        esm_features=esm_features,
+        max_fasta_len=max_fasta_len,
+        device=device
+    )
+
+    test_set = BridgeDTADataset(
+        root=f"{base_dir}/data",
+        dataset=args.dataset.lower(),
+        mode='test',
+        cold_start='',
         kpgt_features=kpgt_features,
         esm_features=esm_features,
         max_fasta_len=max_fasta_len,
@@ -150,10 +161,6 @@ def main():
     ).to(device)
     print(f"Model initialized, using device: {device}")
     
-    ckpt_path = f"{base_dir}/results/{args.model_name}/checkpoints_{args.dataset}/best_model.pth"
-    model.load_state_dict(torch.load(ckpt_path))
-    print(f"Model weights loaded from {ckpt_path}")
-
     # Custom trainer with CI loss handling
     class CIAwareTrainer(DTATrainer):
         def __init__(self, *args, **kwargs):
@@ -301,7 +308,7 @@ def main():
         model=model,
         train_args=args,
         train_dataset=train_set,
-        val_dataset=test_set,
+        val_dataset=validation_set,
         forward_step=bridge_forward_step,
         get_dataloader_fn=get_bridge_dataloader
     )

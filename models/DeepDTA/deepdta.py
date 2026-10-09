@@ -57,4 +57,4 @@ class DeepDTA(nn.Module):
         x = self.relu(x)
         x = self.dropout(x)
         x = self.fc4(x)
-        return x.squeeze()
+        return x.squeeze(-1)

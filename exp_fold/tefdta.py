@@ -81,11 +81,21 @@ def main():
         max_fasta_len=max_fasta_len
     )
 
-    test_set = TEFDTADataset(
+    validation_set = TEFDTADataset(
         root=f"{base_dir}/data",
         dataset=args.dataset.lower(),
         mode='test',
         cold_start=args.cold_start,
+        device=device,
+        max_smiles_len=max_smiles_len,
+        max_fasta_len=max_fasta_len
+    )
+
+    test_set = TEFDTADataset(
+        root=f"{base_dir}/data",
+        dataset=args.dataset.lower(),
+        mode='test',
+        cold_start='',
         device=device,
         max_smiles_len=max_smiles_len,
         max_fasta_len=max_fasta_len
@@ -102,7 +112,7 @@ def main():
         model=model,
         train_args=args,
         train_dataset=train_set,
-        val_dataset=test_set,
+        val_dataset=validation_set,
         forward_step=tefdta_forward_step,
         get_dataloader_fn=get_tefdta_dataloader
     )

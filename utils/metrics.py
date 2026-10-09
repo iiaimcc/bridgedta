@@ -119,7 +119,7 @@ def get_rm2(ys_orig,ys_line):
     r2 = r_squared_error(ys_orig, ys_line)
     r02 = squared_error_zero(ys_orig, ys_line)
 
-    return r2 * (1-np.sqrt(np.absolute((r2*r2)-(r02*r02))))
+    return r2 * (1 - np.sqrt(np.absolute(r2 - r02)))
 
 def compute_metrics(y_true, y_pred, threshold=7.0):
     """

@@ -376,7 +376,7 @@ class Predictor(nn.Module):
         )
     
     def forward(self, x):
-        return self.fc_layers(x).squeeze()
+        return self.fc_layers(x).squeeze(-1)
 
 class CILoss(nn.Module):
     """Concordance Index (CI) Loss for ranking prediction values within a batch"""

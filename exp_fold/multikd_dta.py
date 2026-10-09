@@ -53,7 +53,7 @@ def get_multikd_dta_dataloader(dataset, batch_size, shuffle=False):
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        drop_last=True
+        drop_last=shuffle
     )
 
 class TrainingArguments:
@@ -87,11 +87,18 @@ def main():
         cold_start=args.cold_start
     )
     
-    test_set = MultiKD_DTADataset(
+    validation_set = MultiKD_DTADataset(
         root=f'{base_dir}/data',
         dataset=args.dataset.lower(),
         mode='test',
         cold_start=args.cold_start
+    )
+
+    test_set = MultiKD_DTADataset(
+        root=f'{base_dir}/data',
+        dataset=args.dataset.lower(),
+        mode='test',
+        cold_start=''
     )
 
     # Initialize model
@@ -103,7 +110,7 @@ def main():
         model=model,
         train_args=args,
         train_dataset=train_set,
-        val_dataset=test_set,
+        val_dataset=validation_set,
         forward_step=multikd_dta_forward_step,
         get_dataloader_fn=get_multikd_dta_dataloader
     )

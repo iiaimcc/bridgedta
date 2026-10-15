@@ -86,18 +86,11 @@ def main():
         cold_start=args.cold_start
     )
     
-    validation_set = DeepDTADataset(
-        root=f'{base_dir}/data',
-        dataset=args.dataset.lower(),
-        mode="test",
-        cold_start=args.cold_start
-    )
-
     test_set = DeepDTADataset(
         root=f'{base_dir}/data',
         dataset=args.dataset.lower(),
         mode="test",
-        cold_start=''
+        cold_start=args.cold_start
     )
 
     # Initialize model
@@ -117,7 +110,7 @@ def main():
         model=model,
         train_args=args,
         train_dataset=train_set,
-        val_dataset=validation_set,
+        val_dataset=test_set,
         forward_step=deepdta_forward_step,
         get_dataloader_fn=get_deepdta_dataloader
     )

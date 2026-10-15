@@ -50,9 +50,8 @@ class DTATrainer:
         
         # Setup optimizer
         self.optimizer = optimizer if optimizer else torch.optim.Adam(
-            model.parameters(),
-            lr=self.args.learning_rate,
-            weight_decay=getattr(self.args, 'weight_decay', 0.0),
+            model.parameters(), 
+            lr=self.args.learning_rate
         )
         
         # Loss function

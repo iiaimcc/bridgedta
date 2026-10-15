@@ -2,8 +2,6 @@
 
 BridgeDTA: Lightweight Cross-Attention Bridges LargePre-trained Models for DrugTarget Affinity Prediction
 
-> **This work is currently under peer review at *Bioinformatics*.**
-
 ## Overview
 
 BridgeDTA is a parameter-efficient framework for Drug-Target Affinity (DTA) prediction. It bridges frozen Large Pre-trained Models (LPMs) with trainable Expert encoders through a Cross-Attention Bridge module. This design achieves strong performance with minimal trainable parameters.

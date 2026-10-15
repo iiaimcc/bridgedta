@@ -96,19 +96,11 @@ def main():
         cold_start=args.cold_start,
         device=device
     )
-    validation_set = GS_DTADataset(
-        root=f'{base_dir}/data',
-        dataset=args.dataset.lower(),
-        mode='test',
-        cold_start=args.cold_start,
-        device=device
-    )
-
     test_set = GS_DTADataset(
         root=f'{base_dir}/data',
         dataset=args.dataset.lower(),
         mode='test',
-        cold_start='',
+        cold_start=args.cold_start,
         device=device
     )
 
@@ -121,7 +113,7 @@ def main():
         model=model,
         train_args=args,
         train_dataset=train_set,
-        val_dataset=validation_set,
+        val_dataset=test_set,
         forward_step=gs_dta_forward_step,
         get_dataloader_fn=get_gs_dta_dataloader
     )

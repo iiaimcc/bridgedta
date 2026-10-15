@@ -61,7 +61,7 @@ def get_multikd_dta_dataloader(dataset, batch_size, shuffle=False):
         dataset,
         batch_size=batch_size,
         shuffle=shuffle,
-        drop_last=shuffle
+        drop_last=True
     )
 
 class TrainingArguments:

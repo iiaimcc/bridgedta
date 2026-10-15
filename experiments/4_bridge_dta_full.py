@@ -62,12 +62,12 @@ def _load_kpgt_features(kpgt_path, level, use_global_tokens=True):
             smiles_arr = npz['smiles']
             atom_feats = npz['atom_feats']
             offsets = npz['offsets']
+            fp_vn = npz['fp_vn'] if use_global_tokens else None
+            md_vn = npz['md_vn'] if use_global_tokens else None
         kpgt_features = {}
         for i in range(len(smiles_arr)):
             atoms = atom_feats[offsets[i]:offsets[i + 1]]
             if use_global_tokens:
-                fp_vn = npz['fp_vn']
-                md_vn = npz['md_vn']
                 global_tokens = np.stack([fp_vn[i], md_vn[i]], axis=0)
                 kpgt_features[str(smiles_arr[i])] = np.concatenate(
                     [global_tokens, atoms], axis=0

@@ -3,6 +3,7 @@ BridgeDTA 5-fold cross-validation script.
 Usage: python bridgedta.py <fold>  (fold: 0-4)
 """
 import os
+import random
 import sys
 import torch
 import numpy as np
@@ -44,12 +45,16 @@ class TrainingArguments:
         self.dataset = "kiba"
         self.cold_start = fold
         self.ci_weight = 1.0
+        self.resume_checkpoint = ""
         # KPGT feature mode: "graph" (2304-d) or "node" (768-d)
         self.kpgt_feature_level = "node"
         # Whether to prepend [fp_vn, md_vn] as CLS+REG tokens at the beginning of K/V sequence in node mode
         self.kpgt_use_global_tokens = True
         # Allow command-line overrides (e.g. --dataset davis --num-epochs 1)
-        apply_training_cli_overrides(self)
+        apply_training_cli_overrides(
+            self,
+            keys=("dataset", "num_epochs", "batch_size", "seed", "log_steps", "cold_start", "resume_checkpoint"),
+        )
 
 
 def _load_kpgt_features(kpgt_path, level, use_global_tokens=True):
@@ -149,26 +154,77 @@ def main():
         kpgt_dim=kpgt_dim,
     ).to(device)
     print(f"Model initialized, using device: {device}")
-    
-    ckpt_path = f"{base_dir}/results/{args.model_name}/checkpoints_{args.dataset}/best_model.pth"
-    model.load_state_dict(torch.load(ckpt_path))
-    print(f"Model weights loaded from {ckpt_path}")
 
     # Custom trainer with CI loss handling
     class CIAwareTrainer(DTATrainer):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.ci_weight = self.args.ci_weight
+            self.start_epoch = 0
+            self.resume_global_step = 0
+            self.resume_best_val_loss = float('inf')
+            self.resume_source = None
+
+        def load_training_checkpoint(self, checkpoint_path):
+            checkpoint_path = os.path.abspath(os.path.expanduser(checkpoint_path))
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location=device,
+                weights_only=True,
+            )
+            required_keys = {
+                'model_state_dict', 'optimizer_state_dict', 'epoch',
+                'best_val_loss', 'global_step', 'torch_rng_state',
+                'numpy_rng_state', 'python_rng_state',
+                'training_history', 'metadata'
+            }
+            missing_keys = required_keys.difference(checkpoint)
+            if missing_keys:
+                raise ValueError(
+                    f"Resume checkpoint is missing training state: {sorted(missing_keys)}"
+                )
+
+            self.model.load_state_dict(checkpoint['model_state_dict'])
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.start_epoch = int(checkpoint['epoch'])
+            self.resume_global_step = int(checkpoint['global_step'])
+            self.resume_best_val_loss = float(checkpoint['best_val_loss'])
+            self.resume_source = checkpoint_path
+            torch.set_rng_state(checkpoint['torch_rng_state'])
+            random.setstate(checkpoint['python_rng_state'])
+            numpy_rng_state = checkpoint['numpy_rng_state']
+            np.random.set_state((
+                numpy_rng_state['bit_generator'],
+                numpy_rng_state['state'].cpu().numpy(),
+                numpy_rng_state['position'],
+                numpy_rng_state['has_gauss'],
+                numpy_rng_state['cached_gaussian'],
+            ))
+            if torch.cuda.is_available() and checkpoint.get('cuda_rng_state_all') is not None:
+                torch.cuda.set_rng_state_all(checkpoint['cuda_rng_state_all'])
+            training_history = checkpoint['training_history']
+            self.train_losses = training_history['train_losses']
+            self.epochs = training_history['epochs']
+            self.val_losses = training_history['val_losses']
+            self.val_cis = training_history['val_cis']
+            self.val_rm2s = training_history['val_rm2s']
+
+            logging.info(
+                "Resuming training from %s at epoch %d with metadata %s",
+                checkpoint_path,
+                self.start_epoch,
+                checkpoint['metadata'],
+            )
             
         def train(self):
             best_model = None
-            best_val_loss = float('inf')
-            global_step = 0
+            best_val_loss = self.resume_best_val_loss
+            global_step = self.resume_global_step
             
             # Use the custom or default get_dataloader function for training
             train_dataloader = self.get_dataloader_fn(self.train_dataset, self.args.batch_size, shuffle=True)
             
-            for epoch in range(self.args.num_epochs):
+            for epoch in range(self.start_epoch, self.args.num_epochs):
                 # Training
                 self.model.train()
                 train_loss = 0.0
@@ -216,9 +272,47 @@ def main():
                     if val_loss < best_val_loss:
                         best_val_loss = val_loss
                         best_model = self.model.state_dict()
-                        torch.save(
-                            best_model,
+                        numpy_rng_state = np.random.get_state()
+                        checkpoint_path = os.path.abspath(
                             os.path.join(self.args.output_dir, 'best_model.pth')
+                        )
+                        torch.save(
+                            {
+                                'model_state_dict': best_model,
+                                'optimizer_state_dict': self.optimizer.state_dict(),
+                                'epoch': epoch + 1,
+                                'best_val_loss': best_val_loss,
+                                'global_step': global_step,
+                                'torch_rng_state': torch.get_rng_state(),
+                                'cuda_rng_state_all': (
+                                    torch.cuda.get_rng_state_all()
+                                    if torch.cuda.is_available()
+                                    else None
+                                ),
+                                'python_rng_state': random.getstate(),
+                                'numpy_rng_state': {
+                                    'bit_generator': numpy_rng_state[0],
+                                    'state': torch.from_numpy(numpy_rng_state[1].copy()),
+                                    'position': numpy_rng_state[2],
+                                    'has_gauss': numpy_rng_state[3],
+                                    'cached_gaussian': numpy_rng_state[4],
+                                },
+                                'training_history': {
+                                    'train_losses': self.train_losses,
+                                    'epochs': self.epochs,
+                                    'val_losses': self.val_losses,
+                                    'val_cis': self.val_cis,
+                                    'val_rm2s': self.val_rm2s,
+                                },
+                                'metadata': {
+                                    'dataset': self.args.dataset,
+                                    'fold': self.args.cold_start,
+                                    'seed': self.args.seed,
+                                    'checkpoint_path': checkpoint_path,
+                                    'resumed_from': self.resume_source,
+                                },
+                            },
+                            checkpoint_path,
                         )
                         logging.info(f'New best model saved with validation loss: {val_loss:.4f}')
             
@@ -258,7 +352,13 @@ def main():
             if load_best_model:
                 best_model_path = os.path.join(self.args.output_dir, 'best_model.pth')
                 if os.path.exists(best_model_path):
-                    self.model.load_state_dict(torch.load(best_model_path, map_location=device))
+                    checkpoint = torch.load(
+                        best_model_path,
+                        map_location=device,
+                        weights_only=True,
+                    )
+                    model_state = checkpoint.get('model_state_dict', checkpoint)
+                    self.model.load_state_dict(model_state)
                     logging.info("Loaded best model for prediction")
                 else:
                     logging.warning("Best model not found, using current model state")
@@ -305,6 +405,9 @@ def main():
         forward_step=bridge_forward_step,
         get_dataloader_fn=get_bridge_dataloader
     )
+
+    if args.resume_checkpoint:
+        trainer.load_training_checkpoint(args.resume_checkpoint)
 
     # Train model
     print('Starting training...')
